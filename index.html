@@ -1,0 +1,1731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IBKR 收益分析 · 日历、净值与盈亏洞察</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * {
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        :root{
+            --pnl-neutral:#4e5969;
+            --pnl-red:#c73a3a;
+            --pnl-green:#188450;
+        }
+        html{scrollbar-gutter:stable;}
+        body {
+            background:#f7f8fa;
+            color:#1f2329;
+            padding-bottom:60px;
+        }
+        .app-header{
+            background:#fff;
+            padding:12px 16px;
+            display:grid;
+            grid-template-columns:minmax(0,1fr) max-content;
+            gap:8px;
+            align-items:start;
+            box-shadow:0 1px 2px rgba(0,0,0,0.06);
+        }
+        .header-title{grid-column:1;grid-row:1;min-width:0;overflow-wrap:anywhere;}
+        .latest-nav{
+            grid-column:1 / -1;
+            min-width:0;
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+            padding:10px 12px;
+            border:1px solid #dce8fa;
+            border-radius:10px;
+            background:linear-gradient(120deg,#edf4ff,#f8faff);
+        }
+        .latest-nav-heading{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            flex-wrap:wrap;
+            gap:4px 12px;
+            min-width:0;
+        }
+        .latest-nav-label{font-size:13px;font-weight:500;line-height:1.5;color:#526783;}
+        .latest-nav-date{
+            max-width:100%;
+            font-size:11px;
+            line-height:1.5;
+            color:#64748b;
+            font-variant-numeric:tabular-nums;
+            overflow-wrap:anywhere;
+        }
+        .report-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;}
+        .report-metric{min-width:0;}
+        .report-metric dt{font-size:11px;line-height:1.5;color:#526783;}
+        .report-metric-value{
+            min-width:0;
+            margin-top:2px;
+            font-size:24px;
+            font-weight:700;
+            line-height:1.2;
+            color:var(--pnl-tone,#243f65);
+            font-variant-numeric:tabular-nums;
+            overflow-wrap:anywhere;
+        }
+        .report-flows{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px;padding-top:6px;border-top:1px solid #dce8fa;}
+        .report-flows-title{flex-shrink:0;font-size:11px;line-height:1.5;color:#64748b;}
+        .report-flows-list{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:4px 16px;}
+        .report-flow-item{display:flex;align-items:baseline;gap:6px;min-width:0;max-width:100%;}
+        .report-flow-item dt{flex-shrink:0;font-size:11px;line-height:1.5;color:#526783;}
+        .report-flow-item dd{min-width:0;font-size:13px;font-weight:600;line-height:1.5;color:#243f65;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
+        .header-title h1{
+            font-size:20px;
+            font-weight:600;
+        }
+        .header-desc{
+            font-size:13px;
+            color:#6e7681;
+            margin-top:2px;
+        }
+        .upload-wrap{
+            grid-column:2;
+            grid-row:1;
+            justify-self:end;
+            align-self:start;
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+            align-items:flex-end;
+        }
+        .btn-guide{
+            padding:6px 8px;
+            border:1px solid #dce8fa;
+            border-radius:8px;
+            background:#fff;
+            color:#2373e8;
+            font-size:12px;
+            line-height:1.5;
+            white-space:nowrap;
+            cursor:pointer;
+        }
+        .btn-guide:focus-visible{outline:2px solid #2373e8;outline-offset:2px;}
+        .btn-upload{
+            background:#2373e8;
+            color:#fff;
+            border:none;
+            border-radius:8px;
+            padding:10px 18px;
+            font-size:15px;
+            white-space:nowrap;
+            cursor:pointer;
+        }
+        #file-input{
+            display:none;
+        }
+        .empty-state{
+            text-align:center;
+            margin-top:32px;
+            padding:0 20px;
+        }
+        .empty-state h2{
+            font-size:22px;
+            color:#4e5969;
+            margin-bottom:12px;
+        }
+        .empty-state p{
+            color:#86909c;
+            max-width:540px;
+            margin:0 auto;
+            line-height:1.6;
+        }
+        .usage-guide{
+            margin:8px 4px 0;
+            padding:16px 20px;
+            border:1px solid #e5e6eb;
+            border-radius:16px;
+            background:#fff;
+        }
+        .usage-guide summary{font-size:15px;font-weight:600;cursor:pointer;line-height:1.6;}
+        .usage-guide summary:focus-visible{outline:2px solid #2373e8;outline-offset:4px;border-radius:4px;}
+        .usage-steps{padding-left:22px;margin-top:16px;color:#4e5969;font-size:14px;line-height:1.8;}
+        .usage-steps li+li{margin-top:12px;}
+        .usage-steps strong{font-weight:600;color:#1f2329;}
+        .usage-prompt{
+            margin-top:8px;
+            padding:12px;
+            border:1px solid #dce8fa;
+            border-radius:10px;
+            background:#f3f7ff;
+            color:#1f2329;
+            overflow-wrap:anywhere;
+            -webkit-user-select:text;
+            user-select:text;
+        }
+        .usage-tip{font-size:12px;color:#6e7681;margin-top:4px;}
+        .container{
+            width:100%;
+            margin:0;
+            padding:16px 4px;
+        }
+        .tab-bar{
+            display:flex;
+            gap:6px;
+            margin-bottom:16px;
+        }
+        .tab-bar button{
+            padding:9px 16px;
+            border:1px solid #dcdfe6;
+            background:#fff;
+            border-radius:8px;
+            cursor:pointer;
+            font-size:15px;
+        }
+        .tab-bar button.active{
+            background:#2373e8;
+            color:#fff;
+            border-color:#2373e8;
+        }
+        .month-heading{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            flex-wrap:wrap;
+            gap:12px;
+        }
+        .month-nav{
+            display:flex;
+            align-items:center;
+            gap:8px;
+        }
+        .month-nav button{
+            width:40px;
+            height:40px;
+            border-radius:8px;
+            border:1px solid #e5e6eb;
+            background:#fff;
+            color:#4e5969;
+            font-size:18px;
+            cursor:pointer;
+        }
+        .month-nav button:focus-visible{outline:2px solid #2373e8;outline-offset:2px;}
+        .month-nav button:active{background:#edf4ff;}
+        .calendar-heading-title{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;min-width:0;}
+        .calendar-heading-title h3{flex-shrink:0;}
+        .color-switch-row{
+            display:flex;
+            flex-wrap:wrap;
+            gap:6px;
+            margin:0;
+            font-size:12px;
+            color:#6e7681;
+        }
+        .color-switch-row label{
+            display:flex;
+            align-items:center;
+            gap:4px;
+            padding:5px 6px;
+            white-space:nowrap;
+            border:1px solid #e5e6eb;
+            border-radius:8px;
+            background:#fff;
+            cursor:pointer;
+        }
+        .color-switch-row input{accent-color:#2373e8;}
+        .calendar-note{margin:12px 4px 0;font-size:12px;color:#6e7681;line-height:1.6;}
+        .period-note{display:block;margin:0 0 10px;color:#805b20;font-size:11px;line-height:1.5;}
+        .week-header{
+            display:grid;
+            grid-template-columns:repeat(7,minmax(0,1fr));
+            gap:8px;
+        }
+        .week-header>div{
+            text-align:center;
+            padding:8px 0;
+            font-size:14px;
+            color:#6e7681;
+        }
+        .calendar-grid{
+            display:grid;
+            grid-template-columns:repeat(7,minmax(0,1fr));
+            gap:8px;
+        }
+        .day-cell{
+            min-width:0;
+            min-height:72px;
+            border:1px solid var(--pnl-border,#e5e6eb);
+            border-radius:10px;
+            background:var(--pnl-tint,#fff);
+            padding:6px;
+            cursor:pointer;
+        }
+        .day-cell.no-data{
+            background:#fafbfc;
+            border-style:dashed;
+            color:#86909c;
+            cursor:default;
+        }
+        .day-number{
+            font-size:16px;
+            font-weight:500;
+            margin-bottom:4px;
+            text-align:center;
+        }
+        .day-pnl-text{
+            text-align:center;
+            font-size:12.5px;
+            font-weight:600;
+            font-variant-numeric:tabular-nums;
+            line-height:1.4;
+            overflow-wrap:anywhere;
+            word-break:normal;
+            white-space:normal;
+        }
+        .day-pnl-text{color:var(--pnl-tone,#4e5969);}
+        .day-return-text{
+            margin-top:2px;
+            text-align:center;
+            font-size:11px;
+            line-height:1.2;
+            font-variant-numeric:tabular-nums;
+            color:var(--pnl-tone,#4e5969);
+            overflow-wrap:anywhere;
+        }
+
+        .report-page{
+            padding:4px 0 16px;
+            background:transparent;
+        }
+        .page-heading{margin:4px 4px 16px;}
+        .page-heading h2{font-size:24px;font-weight:650;}
+        .page-heading p{margin-top:6px;font-size:12px;color:#6e7681;}
+        .pnl-neutral{
+            --pnl-tone:var(--pnl-neutral);
+            --pnl-tint:#f7f8fa;
+            --pnl-border:#e5e6eb;
+        }
+        .pnl-red{
+            --pnl-tone:var(--pnl-red);
+            --pnl-tint:#fff3f2;
+            --pnl-border:#f5d8d4;
+        }
+        .pnl-green{
+            --pnl-tone:var(--pnl-green);
+            --pnl-tint:#f0faf4;
+            --pnl-border:#d3ecdd;
+        }
+        .summary-card{
+            display:grid;
+            grid-template-columns:minmax(0,3fr) minmax(0,2fr);
+            align-items:center;
+            gap:4px 12px;
+            padding:8px 12px;
+            border:1px solid var(--pnl-border);
+            border-radius:10px;
+            background:linear-gradient(135deg,var(--pnl-tint),#fff);
+        }
+        .summary-heading{grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;}
+        .summary-heading h2{min-width:0;font-size:17px;font-weight:650;line-height:1.3;overflow-wrap:anywhere;}
+        .summary-heading .month-nav{flex-shrink:0;gap:6px;}
+        .summary-heading .month-nav button{width:32px;height:32px;}
+        .summary-footer{grid-column:2;grid-row:2;min-width:0;text-align:right;}
+        .summary-coverage{min-width:0;font-size:11px;line-height:1.5;color:#6e7681;overflow-wrap:anywhere;}
+        .summary-notes{grid-column:1 / -1;min-width:0;max-width:100%;font-size:11px;line-height:1.5;color:#6e7681;}
+        .summary-notes summary{cursor:pointer;}
+        .summary-notes p{margin-top:4px;overflow-wrap:anywhere;}
+        .summary-card + .section-heading{margin-top:12px;margin-bottom:8px;}
+        .summary-label{font-size:11px;line-height:1.3;color:#6e7681;}
+        .summary-main{grid-column:1;grid-row:2;display:flex;flex-direction:column;gap:4px;min-width:0;margin:0;}
+        .summary-values{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;min-width:0;max-width:100%;}
+        .summary-main .summary-label{flex:0 0 5em;align-self:center;}
+        .summary-return{display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 4px;min-width:0;max-width:100%;}
+        .summary-rate{min-width:0;font-size:20px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
+        .summary-amount{
+            margin:0;
+            min-width:0;
+            font-size:24px;
+            font-weight:700;
+            line-height:1.2;
+            color:var(--pnl-tone);
+            font-variant-numeric:tabular-nums;
+            overflow-wrap:anywhere;
+        }
+        .stat-value{
+            font-size:20px;
+            font-weight:600;
+            font-variant-numeric:tabular-nums;
+            overflow-wrap:anywhere;
+        }
+        #yearReturn,#kpiMonthReturn{color:var(--pnl-tone);}
+        .section-heading{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            flex-wrap:wrap;
+            gap:8px;
+            margin:20px 4px 12px;
+        }
+        .section-heading h3{font-size:16px;}
+        .section-heading span{font-size:12px;color:#6e7681;}
+        .year-month-grid,.year-history-grid{
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:8px;
+        }
+        .year-history{margin-bottom:24px;}
+        .year-history-note{margin:12px 4px 0;font-size:12px;color:#6e7681;line-height:1.6;}
+        .year-history-coverage{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:0 4px;font-size:10px;line-height:1.4;color:#6e7681;font-variant-numeric:tabular-nums;}
+        .year-history-coverage span{white-space:nowrap;}
+        .period-return{display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 6px;margin-bottom:6px;color:var(--pnl-tone);font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
+        .period-return-label{font-size:12px;color:#6e7681;}
+        .period-return strong{font-size:18px;font-weight:650;min-width:0;}
+        .year-month-card{
+            display:flex;
+            flex-direction:column;
+            min-width:0;
+            padding:10px 12px;
+            border:1px solid var(--pnl-border);
+            border-radius:12px;
+            background:var(--pnl-tint);
+            color:#1f2329;
+            text-align:left;
+            font:inherit;
+            cursor:pointer;
+            -webkit-appearance:none;
+            appearance:none;
+        }
+        .year-month-card:focus-visible{
+            outline:2px solid #2373e8;
+            outline-offset:2px;
+        }
+        .year-month-card:active{box-shadow:inset 0 0 0 1px var(--pnl-tone);}
+        .year-month-card.is-selected{border-color:#2373e8;}
+        .year-month-top{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            flex-wrap:wrap;
+            gap:6px;
+        }
+        .year-month-name{font-size:15px;font-weight:600;}
+        .year-month-state{
+            font-size:11px;
+            color:var(--pnl-tone);
+            background:rgba(255,255,255,0.8);
+            padding:3px 7px;
+            border-radius:6px;
+        }
+        .year-month-amount{
+            display:block;
+            margin:6px 0;
+            font-size:24px;
+            font-weight:650;
+            line-height:1.2;
+            color:var(--pnl-tone);
+            font-variant-numeric:tabular-nums;
+            overflow-wrap:anywhere;
+        }
+        .year-month-meta{
+            display:flex;
+            justify-content:flex-end;
+            flex-wrap:wrap;
+            gap:4px;
+            margin-top:auto;
+            font-size:11px;
+            color:#6e7681;
+        }
+        .year-month-link{color:#2373e8;}
+        .year-month-card.no-data{background:#fafbfc;border-style:dashed;}
+        .year-month-card.no-data .year-month-amount{color:#a3aab5;}
+        .year-month-grid .year-month-card,.year-history-grid .year-month-card{
+            display:grid;
+            grid-template-columns:max-content minmax(0,1fr);
+            align-items:baseline;
+            gap:4px 8px;
+            padding:10px;
+        }
+        .year-month-grid .year-month-name,.year-history-grid .year-month-name{grid-area:1 / 1;font-size:14px;}
+        .year-month-grid .year-month-amount,.year-history-grid .year-month-amount{grid-area:1 / 2;min-width:0;margin:0;text-align:right;font-size:22px;}
+        .year-month-grid .year-month-state,.year-history-grid .year-month-state{grid-area:2 / 1;align-self:center;padding:0;background:none;line-height:1.4;}
+        .year-month-grid .period-return,.year-history-grid .period-return{grid-area:2 / 2;min-width:0;justify-content:flex-end;gap:2px 4px;margin:0;line-height:1.3;}
+        .year-month-grid .period-return-label,.year-history-grid .period-return-label{font-size:10px;}
+        .year-month-grid .period-return strong,.year-history-grid .period-return strong{font-size:14px;}
+        .year-month-grid .year-month-link,.year-history-grid .year-month-link{font-size:12px;font-weight:400;}
+        .analysis-grid{
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:12px;
+        }
+        .panel-card{
+            min-width:0;
+            padding:20px;
+            border:1px solid #e5e6eb;
+            border-radius:16px;
+            background:#fff;
+        }
+        .panel-heading h3{font-size:16px;font-weight:650;}
+        .panel-heading p{font-size:12px;color:#6e7681;margin-top:6px;line-height:1.6;}
+        .analysis-summary{margin-bottom:12px;}
+        .analysis-summary .stat-value{margin-top:10px;font-size:32px;}
+        .chart-container{height:300px;width:100%;margin-top:16px;}
+        .panel-card.symbol-table-panel{padding:0;}
+        .symbol-table-panel .table-scroll{border-radius:inherit;}
+        .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+        #symbolTable{width:100%;min-width:280px;border-collapse:collapse;}
+        #symbolTable th,#symbolTable td{
+            border-bottom:1px solid #eef0f3;
+            padding:14px 12px;
+            font-size:13px;
+            text-align:left;
+        }
+        #symbolTable th{background:#f7f8fa;color:#6e7681;font-weight:500;white-space:nowrap;}
+        #symbolTable td:first-child{font-weight:600;overflow-wrap:anywhere;}
+        #symbolTable .symbol-column{width:160px;min-width:160px;padding-left:6px;padding-right:0;}
+        #symbolTable td:not(.amount-cell){overflow-wrap:anywhere;}
+        #symbolTable th.amount-heading,#symbolTable .amount-cell{text-align:right;white-space:nowrap;padding-left:0;padding-right:0;}
+        #symbolTable .amount-cell{color:var(--pnl-tone);font-weight:600;font-variant-numeric:tabular-nums;}
+        #symbolTable.fifo-table{table-layout:fixed;min-width:0;}
+        #symbolTable.fifo-table th.amount-heading,#symbolTable.fifo-table .amount-cell{white-space:normal;overflow-wrap:anywhere;}
+        #symbolTable.fifo-table th.amount-heading:last-child,#symbolTable.fifo-table .amount-cell:last-child{padding-right:6px;}
+        #symbolTable tr:last-child td{border-bottom:0;}
+        #symbolTable .table-empty{text-align:center;padding:32px 12px;color:#86909c;font-weight:400;}
+        @media (min-width:760px){
+            .report-metrics{grid-template-columns:repeat(4,minmax(0,1fr));}
+        }
+        @media (max-width:900px){
+            .analysis-grid{grid-template-columns:minmax(0,1fr);}
+            .year-month-grid,.year-history-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+        }
+        .hide{
+            display:none !important;
+        }
+        .modal-overlay{
+            position:fixed;
+            inset:0;
+            background:rgba(0,0,0,0.45);
+            z-index:200;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            padding:16px;
+        }
+        .modal-box{
+            background:#fff;
+            border-radius:12px;
+            width:100%;
+            max-width:480px;
+            max-height:85vh;
+            overflow-y:auto;
+            overflow-wrap:anywhere;
+            padding:20px;
+        }
+        .modal-close{
+            text-align:right;
+            cursor:pointer;
+            font-size:20px;
+        }
+        @media (max-width:600px){
+            .app-header{
+                padding:10px 12px;
+                gap:8px;
+            }
+            .container{padding:8px 4px;}
+            .tab-bar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));}
+            .tab-bar button{min-width:0;padding:9px 2px;font-size:14px;}
+            .usage-guide{padding:14px 12px;}
+            .usage-steps{font-size:13px;}
+            .calendar-grid,.week-header{gap:3px;}
+            .day-cell{
+                min-height:60px;
+                padding:5px 2px;
+                border-radius:6px;
+            }
+            .day-number{font-size:14px;line-height:1.2;margin-bottom:2px;}
+            .day-pnl-text{font-size:11px;line-height:1.2;}
+            .day-return-text{font-size:10px;}
+            .page-heading{margin-bottom:12px;}
+            .page-heading h2{font-size:22px;}
+            .summary-card{padding:6px 10px;}
+            .summary-main{gap:2px 8px;}
+            .summary-amount{font-size:22px;}
+            .summary-rate{font-size:18px;}
+            .latest-nav-label{font-size:12px;}
+            .report-metrics{column-gap:12px;}
+            .report-metric-value{font-size:22px;}
+            .report-flows-list{column-gap:12px;}
+            .stat-value{font-size:18px;}
+            .year-month-grid,.year-history-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
+            .year-month-card{padding:8px 10px;}
+            .year-month-amount{font-size:22px;}
+            .year-month-grid .year-month-card,.year-history-grid .year-month-card{padding:8px;column-gap:6px;}
+            .year-month-grid .year-month-amount,.year-history-grid .year-month-amount{font-size:20px;}
+            .month-nav button{width:34px;height:34px;}
+            .panel-card{padding:16px 12px;}
+            .chart-container{height:260px;margin-top:12px;}
+            #symbolTable th,#symbolTable td{padding:12px 10px;}
+            #symbolTable .symbol-column{width:140px;min-width:140px;}
+        }
+    </style>
+</head>
+<body>
+<div class="app-header">
+    <div class="header-title">
+        <h1>IBKR 收益分析</h1>
+        <div class="header-desc">收益日历 · 年度汇总 · 净值走势 · 标的盈亏</div>
+        <div class="header-desc hide" id="currencyLabel"></div>
+    </div>
+    <div class="upload-wrap">
+        <button class="btn-upload" onclick="document.getElementById('file-input').click()">⬆上传报表</button>
+        <button type="button" class="btn-guide hide" id="usageGuideBtn" aria-controls="usageGuide" aria-expanded="false">使用提示</button>
+        <input id="file-input" type="file" accept=".xlsx,.csv"/>
+    </div>
+    <div class="latest-nav hide" id="latestNav" aria-live="polite">
+        <div class="latest-nav-heading">
+            <span class="latest-nav-label" id="reportOverviewTitle">报表概览</span>
+            <span class="latest-nav-date" id="latestNavDate" title="当前报表净值覆盖区间；首条净值仅作基准，盈亏不含该日"></span>
+        </div>
+        <dl class="report-metrics" aria-labelledby="reportOverviewTitle">
+            <div class="report-metric">
+                <dt title="当前报表按日期排序后的首条净值，作为区间盈亏的起始基准">初始净值</dt>
+                <dd class="report-metric-value" id="initialNavValue"></dd>
+            </div>
+            <div class="report-metric">
+                <dt title="当前报表最后一条净值，不随年月切换改变">最新净值</dt>
+                <dd class="report-metric-value" id="latestNavValue"></dd>
+            </div>
+            <div class="report-metric">
+                <dt title="区间盈亏 = 最新净值 − 初始净值 − 区间现金入金 + 现金出金 − 证券转入市值 + 证券转出市值；只调整净值区间内已识别的流量，首条净值仅作基准">区间盈亏</dt>
+                <dd class="report-metric-value pnl-neutral" id="reportPnlValue"></dd>
+            </div>
+            <div class="report-metric">
+                <dt title="盈亏比例 = 区间盈亏金额 ÷（初始净值 + 区间现金入金 + 证券转入市值）；基准日和净值范围外流量不计入；出金和证券转出不扣分母，不按投入天数加权，非年化；本金无效时显示“—”">盈亏比例（估算）</dt>
+                <dd class="report-metric-value pnl-neutral" id="reportReturnValue"></dd>
+            </div>
+        </dl>
+        <div class="report-flows hide" id="reportFlows" title="整份报表已识别的资金汇总，包含基准日和净值范围外记录；不直接作为区间收益率的分母">
+            <div class="report-flows-title" id="reportFlowsTitle">资金汇总</div>
+            <dl class="report-flows-list" id="reportFlowItems" aria-labelledby="reportFlowsTitle"></dl>
+        </div>
+    </div>
+</div>
+
+<div class="empty-state" id="emptyPage">
+    <h2>请上传交易报表文件</h2>
+    <p>支持 .csv、.xlsx，自动识别每日净值、现金出入金、证券转移及 MTM/FIFO 标的盈亏等分段表头；报表数据仅在本地浏览器处理，不上传服务器。首次打开需联网加载解析和图表库。</p>
+</div>
+
+<details class="usage-guide" id="usageGuide" open>
+    <summary>使用方法 · 从 IBKR 导出报表</summary>
+    <ol class="usage-steps">
+        <li><strong>进入自主查询</strong><br>打开 IBKR APP，依次进入「报表和税务」→「活动报表」→「自主查询」。</li>
+        <li><strong>使用 AI 配置</strong><br>选择「使用 AI 配置」，输入以下内容：
+            <p class="usage-prompt">导出证券转入转出记录需要所有字段、入金出金记录、交易日收盘账户净值（需要包含当前币种）、持仓市值、股息、利息、佣金等费用、所有交易记录，各标的已实现和未实现盈亏</p>
+            <p class="usage-tip">可长按或选中上方文本复制。计算资金调整收益时，还需导出同期完整出入金明细、本位币现金流水及期初前一条净值；证券转移需提供 Date / Symbol / Direction / Quantity / PositionAmount / CurrencyPrimary。请保留 MTM 或 FIFO 标的盈亏明细，并核对收支汇总，缺失数据不要用 0 代替。USD 净值下，港元入金缺少本位币流水及 FXRateToBase 时，可按同账户入金当日起 7 个自然日内（含第 7 日）的 USD.HKD 买入记录估算；需导出 TradeDate / Buy/Sell / Quantity / TradePrice / Proceeds / CurrencyPrimary / AssetClass，且港元支出合计与入金相符。临近还有其他港元出入金、反向换汇或重复交易时不自动匹配。</p>
+        </li>
+        <li><strong>生成并保存</strong><br>点击「Generate」，等待生成完成后点击「保存」。</li>
+        <li><strong>找到已保存的报表</strong><br>返回「活动自主查询」，找到刚保存的报表，点击旁边的「→」下载入口。</li>
+        <li><strong>运行并下载</strong><br>选择需要的日期范围，点击「运行」，完成后下载 CSV 文件。</li>
+        <li><strong>导入并查看收益</strong><br>点击本页顶部「上传报表」，选择下载的 CSV，即可查看月度收益、年度收益、历年收益和盈亏分析。</li>
+    </ol>
+</details>
+
+<div class="container hide" id="mainPage">
+    <div class="tab-bar">
+        <button class="active" data-view="calendar">月度收益</button>
+        <button data-view="year">年度收益</button>
+        <button data-view="history">历年收益</button>
+        <button data-view="analysis">盈亏分析</button>
+    </div>
+
+    <div id="view-calendar">
+        <div class="report-page">
+            <div class="summary-card pnl-neutral" id="monthOverview">
+                <div class="summary-heading">
+                    <h2 id="monthTitle"></h2>
+                    <div class="month-nav">
+                        <button type="button" id="prevMonthBtn" aria-label="上个月">&lt;</button>
+                        <button type="button" id="nextMonthBtn" aria-label="下个月">&gt;</button>
+                    </div>
+                </div>
+                <div class="summary-main">
+                    <div class="summary-values">
+                        <span class="summary-label" title="调整已识别现金及证券转移后的盈亏">当月盈亏</span>
+                        <div class="summary-amount" id="kpiMonthPnl">—</div>
+                    </div>
+                    <div class="summary-return" title="期间收益率 = 期间盈亏金额 ÷（期初净值 + 期间现金入金 + 证券转入市值）；出金和证券转出不扣分母，不按投入天数加权，非年化；本金无效时显示“—”">
+                        <span class="summary-label">月收益率（估算）</span>
+                        <div class="summary-rate" id="kpiMonthReturn">—</div>
+                    </div>
+                </div>
+                <div class="summary-footer">
+                    <p class="summary-coverage" id="monthCoverage"></p>
+                </div>
+                <details class="summary-notes hide" id="monthNotes">
+                    <summary>计算说明</summary>
+                    <p id="monthCalculationNote"></p>
+                </details>
+            </div>
+            <div class="section-heading">
+                <div class="calendar-heading-title">
+                    <h3>每日盈亏</h3>
+                    <div class="color-switch-row" role="group" aria-label="涨跌配色">
+                        <label><input type="radio" name="colorMode" value="redGreen" checked />红涨绿跌</label>
+                        <label><input type="radio" name="colorMode" value="greenRed"/>绿涨红跌</label>
+                    </div>
+                </div>
+                <span id="monthCalendarHint">点击日期查看明细</span>
+            </div>
+            <div class="week-header">
+                <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div>
+            </div>
+            <div class="calendar-grid" id="calendarBody"></div>
+            <div class="calendar-note">
+                区间盈亏 = 本次净值 − 上次净值 − 现金入金 + 现金出金 − 证券转入市值 + 证券转出市值。日收益率估算 = 区间盈亏 ÷（上次净值 + 现金入金 + 证券转入市值），假设所有流入在区间开始、流出在区间结束。月度、年度及历年收益率 = 期间盈亏金额 ÷（期初净值 + 期间现金入金 + 证券转入市值），展示时乘以 100%。期初净值取首个盈亏区间之前的净值，不使用该区间结束时的净值；出金和证券转出不扣减分母，不按投入天数加权，非年化、非 IBKR 官方收益率。非净值日的现金和证券转移归入下一条净值区间；首条仅作基准，该日流量不重复计入期间本金，净值覆盖范围外的流量不计入。期间本金须为有效正数，否则收益率显示“—”；零资产且无转移的日区间仍不计日收益率。部分报表不代表完整月/年，未提供的转移无法调整；FIFO 标的盈亏不叠加到账户收益。港元入金若采用实际换汇所得美元估算，金额回填到原入金日，换汇本身不再计一次入金，佣金不重复扣除；此金额不是 IBKR 入金日折算值。点击日期查看资金明细。
+            </div>
+        </div>
+    </div>
+
+    <div id="view-year" class="hide">
+        <div class="report-page">
+            <div class="summary-card pnl-neutral" id="yearOverview">
+                <div class="summary-heading">
+                    <h2 id="yearTitle">年度收益</h2>
+                    <div class="month-nav">
+                        <button type="button" id="prevYearBtn" aria-label="上一年" title="上一年">&lt;</button>
+                        <button type="button" id="nextYearBtn" aria-label="下一年" title="下一年">&gt;</button>
+                    </div>
+                </div>
+                <div class="summary-main">
+                    <div class="summary-values">
+                        <span class="summary-label" title="按报表已有区间汇总，调整已识别现金及证券转移后的盈亏">年度盈亏</span>
+                        <div class="summary-amount" id="yearTotalPnl">—</div>
+                    </div>
+                    <div class="summary-return" title="期间收益率 = 期间盈亏金额 ÷（期初净值 + 期间现金入金 + 证券转入市值）；出金和证券转出不扣分母，不按投入天数加权，非年化；本金无效时显示“—”">
+                        <span class="summary-label">年收益率（估算）</span>
+                        <div class="summary-rate" id="yearReturn">—</div>
+                    </div>
+                </div>
+                <div class="summary-footer">
+                    <p class="summary-coverage" id="yearCoverage"></p>
+                </div>
+            </div>
+            <div class="section-heading">
+                <h3>月度盈亏</h3>
+                <span>点击月份查看日历</span>
+            </div>
+            <div class="year-month-grid" id="yearMonthGrid"></div>
+        </div>
+    </div>
+
+    <div id="view-history" class="hide">
+        <div class="report-page">
+            <section class="year-history" aria-labelledby="yearHistoryTitle">
+                <div class="page-heading">
+                    <h2 id="yearHistoryTitle">历年收益总览</h2>
+                    <p>现金及证券转移调整口径 · 点击年份进入年度收益，查看各月明细</p>
+                </div>
+                <div class="year-history-grid" id="yearHistoryGrid"></div>
+                <p class="year-history-note">收益率 = 当年报表区间盈亏金额 ÷（期初净值 + 区间现金入金 + 证券转入市值）；出金和证券转出不扣分母，不按投入天数加权。本金无效时显示“—”，仅覆盖当前报表区间，非年化、非 IBKR 官方收益率。跨年对比需导入包含多个年份的报表；未提供的证券转入/转出不在调整范围。</p>
+            </section>
+        </div>
+    </div>
+
+    <div id="view-analysis" class="hide">
+        <div class="report-page">
+            <div class="page-heading">
+                <h2>盈亏分析</h2>
+                <p id="analysisRange">按整份报表展示 · 不受日历月份筛选影响</p>
+            </div>
+            <section class="panel-card analysis-summary" aria-labelledby="analysisWinRateTitle">
+                <div class="panel-heading">
+                    <h3 id="analysisWinRateTitle">胜率</h3>
+                    <div class="stat-value" id="analysisWinRate">—</div>
+                    <p>按整份报表统计盈利区间占比，非逐笔交易胜率。持平计入分母；不含首条基准及零资产且无现金或证券转移的区间。</p>
+                </div>
+            </section>
+            <div class="analysis-grid">
+                <div class="panel-card">
+                    <div class="panel-heading">
+                        <h3>净值走势</h3>
+                        <p>账户总值 · 查看资金规模变化</p>
+                    </div>
+                    <div class="chart-container" id="chartNav"></div>
+                </div>
+                <div class="panel-card">
+                    <div class="panel-heading">
+                        <h3>每日盈亏</h3>
+                        <p>调整已识别现金及证券转移 · 配色跟随日历设置</p>
+                    </div>
+                    <div class="chart-container" id="chartPnl"></div>
+                </div>
+            </div>
+            <div class="section-heading">
+                <h3>各标的盈亏排行</h3>
+                <span id="symbolCount">按合计盈亏排序</span>
+            </div>
+            <p class="calendar-note" id="symbolBasisNote"></p>
+            <div class="panel-card symbol-table-panel">
+                <div class="table-scroll" tabindex="0" role="region" aria-label="标的盈亏表格，可横向滚动">
+                    <table id="symbolTable">
+                        <thead>
+                            <tr><th scope="col" class="symbol-column">代码</th><th scope="col" class="amount-heading">合计盈亏</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="modalWrap" class="modal-overlay hide">
+    <div class="modal-box">
+        <div class="modal-close" onclick="closeModal()">×</div>
+        <div id="modalContent"></div>
+    </div>
+</div>
+
+<script>
+let dailyData = [];
+let symbolList = [];
+let currentYear, currentMonth;
+let chartPnl, chartNav;
+let colorMode = "redGreen";
+let hasCashFlowData = false;
+let hasTransferData = false;
+let symbolBasis = "MTM", symbolNote = "", reportWarning = "";
+
+const emptyPage = document.getElementById("emptyPage");
+const mainPage = document.getElementById("mainPage");
+const usageGuide = document.getElementById("usageGuide");
+const usageGuideBtn = document.getElementById("usageGuideBtn");
+
+function setUsageGuideVisible(visible){
+    if(!visible && usageGuide.contains(document.activeElement)) usageGuideBtn.focus({preventScroll:true});
+    usageGuide.classList.toggle("hide", !visible);
+    usageGuide.open = visible;
+    usageGuideBtn.textContent = visible ? "隐藏提示" : "使用提示";
+    usageGuideBtn.setAttribute("aria-expanded", String(visible));
+}
+usageGuideBtn.onclick = ()=>{
+    const visible = usageGuide.classList.contains("hide");
+    setUsageGuideVisible(visible);
+    if(visible){
+        window.scrollTo({top:0,behavior:"auto"});
+        usageGuide.querySelector("summary").focus({preventScroll:true});
+    }
+};
+usageGuide.addEventListener("toggle", ()=>{
+    // 导入后关闭说明时连同标题一起隐藏，避免留下占位行。
+    if(dailyData.length && !usageGuide.open) setUsageGuideVisible(false);
+});
+
+// 各视图共用涨跌配色和汇总金额格式，不改变原始计算精度。
+function getPnlTone(value){
+    if(!Number.isFinite(value) || value === 0) return "pnl-neutral";
+    return (value > 0) === (colorMode === "redGreen") ? "pnl-red" : "pnl-green";
+}
+function formatPnlAmount(value){
+    if(!Number.isFinite(value)) return "—";
+    const rounded = Number(value.toFixed(0));
+    return (rounded > 0 ? "+" : "") + rounded.toLocaleString("zh-CN");
+}
+// 统一接收未取整的小数收益率，避免期间统计再次使用错误的首日收盘净值。
+function formatReturnRate(rate){
+    if(!Number.isFinite(rate)) return "—";
+    const percent = rate * 100;
+    return Number.isFinite(percent) ? Number(percent.toFixed(2)).toFixed(2)+"%" : "—";
+}
+function formatDailyReturn(row){
+    return formatReturnRate(row.returnRate);
+}
+function summarizePeriod(rows){
+    const measured = rows.filter(row=>Number.isFinite(row.pnl));
+    const invested = measured.filter(row=>!row.idle);
+    const pnl = measured.length ? measured.reduce((sum,row)=>sum+row.pnl,0) : null;
+    // 本金与盈亏使用同一计算区间；基准日流量已包含在期初净值中，不再重复计入。
+    const openingNav = measured.length ? measured[0].previousNav : null;
+    const inflows = measured.reduce((sum,row)=>sum+row.externalIn,0);
+    const capital = Number.isFinite(openingNav) ? openingNav + inflows : null;
+    const rate = Number.isFinite(pnl) && Number.isFinite(capital) && capital>0 ? pnl/capital : null;
+    return {
+        pnl:Number.isFinite(pnl) ? pnl : null,
+        returnRate:Number.isFinite(rate) ? rate : null,
+        winRate:invested.length ? invested.filter(row=>row.pnl>0).length / invested.length : null,
+        note:[rows.some(row=>row.baseline) ? "首条仅作基准，收益不含该日" : "",
+            measured.length && !Number.isFinite(rate) ? "期间投入本金无效或计算结果超出范围，收益率暂不可算" : "",
+            rows.some(row=>row.reviewRequired) ? "含大幅净值变动，需核对资金与证券转移" : "",
+            rows.length ? reportWarning : ""].filter(Boolean).join("；")
+    };
+}
+function renderReportOverview(){
+    if(!dailyData.length) return;
+    // 页头统一汇总整份报表，初始净值保留真实零值，不使用当前年月筛选。
+    const initial = dailyData[0], latest = dailyData[dailyData.length-1];
+    const summary = summarizePeriod(dailyData);
+    [["initialNavValue",initial.nav],["latestNavValue",latest.nav]].forEach(([id,value])=>{
+        document.getElementById(id).textContent = value.toLocaleString("zh-CN", {
+            minimumFractionDigits:2, maximumFractionDigits:2
+        });
+    });
+    const pnlValue = document.getElementById("reportPnlValue");
+    pnlValue.textContent = formatPnlAmount(summary.pnl);
+    pnlValue.className = "report-metric-value " + getPnlTone(summary.pnl);
+    const returnValue = document.getElementById("reportReturnValue");
+    returnValue.textContent = formatReturnRate(summary.returnRate);
+    returnValue.className = "report-metric-value " + getPnlTone(summary.returnRate);
+    document.getElementById("latestNavDate").textContent = initial.date.toLocaleDateString("zh-CN") + " — " + latest.date.toLocaleDateString("zh-CN");
+    document.getElementById("latestNav").classList.remove("hide");
+}
+function periodCoverage(rows){
+    if(!rows.length) return "暂无报表数据";
+    const first = rows[0].previousDate || rows[0].date;
+    return `计算区间：${first.toLocaleDateString("zh-CN")} 收盘 — ${rows[rows.length-1].date.toLocaleDateString("zh-CN")} 收盘`;
+}
+
+function estimateHkdDeposits(flows, trades, currency){
+    if(currency !== "USD") return flows;
+    const dayNumber = date=>Date.UTC(date.getFullYear(),date.getMonth(),date.getDate())/86400000;
+    const seenTrades = new Set();
+    return flows.map(flow=>{
+        if(flow.currency !== "HKD" || flow.amount<=0 || (Number.isFinite(flow.fxRate) && flow.fxRate>0)) return flow;
+        const day = dayNumber(flow.date);
+        const fail = reason=>{ throw new Error(`${flow.date.toLocaleDateString("zh-CN")} 的港元入金无法按换汇估算：${reason}。请提供本位币流水或 FXRateToBase。`); };
+        if(!flow.account) fail("缺少账户标识");
+        // 只处理孤立入金：邻近出入金可能共用换汇资金，不猜测拆分或分摊关系。
+        if(flows.some(other=>other!==flow && other.account===flow.account && other.currency==="HKD" &&
+            Math.abs(dayNumber(other.date)-day)<=7)) fail("前后 7 日内还有其他港元出入金，关联不唯一");
+        const matches = trades.filter(trade=>trade.account===flow.account &&
+            dayNumber(trade.date)>=day && dayNumber(trade.date)<=day+7).sort((a,b)=>a.date-b.date);
+        if(!matches.length) fail("入金后 7 日内没有对应的 USD.HKD 买入记录");
+        if(matches.some(trade=>trade.side!=="BUY")) fail("匹配区间含反向换汇");
+        let spent = 0, received = 0;
+        for(const trade of matches){
+            const keys = [JSON.stringify([trade.account,trade.time || trade.date.getTime(),trade.side,trade.quantity,trade.price,trade.proceeds])];
+            if(trade.id) keys.push(JSON.stringify(["id",trade.account,trade.id]));
+            if(keys.some(key=>seenTrades.has(key))) fail("换汇记录重复或已被其他入金使用");
+            keys.forEach(key=>seenTrades.add(key));
+            spent -= trade.proceeds;
+            received += trade.quantity;
+        }
+        // 整组匹配包括小额尾款；不挑部分成交凑数，也不按最新汇率推算。
+        if(!Number.isFinite(spent) || !Number.isFinite(received) || received<=0 ||
+            Math.abs(spent-flow.amount)>Math.min(0.01,flow.amount*0.000001)) fail("换汇港元支出合计与入金金额不符");
+        return {...flow,amount:received,currency,fxEstimate:true,originalAmount:flow.amount,originalCurrency:flow.currency,fxMatches:matches};
+    });
+}
+
+function reconcileCashFlows(rows, ledger, transactions, ledgerCurrencies, balances, summaries, currency, hasLedger, hasTransactions, fxTrades = []){
+    // 净值段缺少币种时，只通过非零的同日现金余额核对推断，不默认美元。
+    let currencyFromLedger = false;
+    if(!currency && ledgerCurrencies.size === 1){
+        const matched = balances.some(balance=>ledgerCurrencies.has(balance.currency) && rows.some(row=>
+            row.date.getTime() === balance.date.getTime() && Number.isFinite(row.cash) &&
+            Math.abs(row.cash)>0.01 && Math.abs(row.cash-balance.amount)<0.02));
+        if(matched){
+            currency = ledgerCurrencies.values().next().value;
+            currencyFromLedger = true;
+        }
+    }
+    const useLedger = hasLedger && ledgerCurrencies.size === 1 && ledgerCurrencies.has(currency);
+    const warnings = [];
+    let crossCurrencyUnchecked = false;
+    let flows;
+    if(useLedger){
+        flows = ledger;
+        // 同日、同方向交叉核对；两段是同一批资金，不相加，也不使用猜测汇率。
+        if(hasTransactions){
+            const groups = new Map();
+            const add = (flow,source)=>{
+                const key = flow.date.getTime()+":"+Math.sign(flow.amount);
+                if(!groups.has(key)) groups.set(key,{ledger:[],detail:[]});
+                groups.get(key)[source].push(flow);
+            };
+            ledger.forEach(flow=>add(flow,"ledger"));
+            transactions.forEach(flow=>add(flow,"detail"));
+            for(const group of groups.values()){
+                const canCompareAmounts = group.detail.every(flow=>flow.currency === currency || (Number.isFinite(flow.fxRate) && flow.fxRate>0));
+                const ledgerSum = group.ledger.reduce((sum,flow)=>sum+flow.amount,0);
+                const detailSum = canCompareAmounts ? group.detail.reduce((sum,flow)=>sum+flow.amount*(flow.currency === currency ? 1 : flow.fxRate),0) : null;
+                if(!Number.isFinite(ledgerSum) || group.ledger.length !== group.detail.length || (canCompareAmounts && (!Number.isFinite(detailSum) || Math.abs(ledgerSum-detailSum)>0.02))){
+                    throw new Error("出入金明细与现金流水无法逐日核对，请导出同一日期范围的完整数据。");
+                }
+                if(!canCompareAmounts) crossCurrencyUnchecked = true;
+            }
+        }
+    }else{
+        // 有可用本位币流水时不进入估算；原币明细有有效汇率时仍优先使用报表汇率。
+        flows = hasTransactions ? estimateHkdDeposits(transactions,fxTrades,currency) : ledger;
+        flows = flows.map(flow=>{
+            if(currency && flow.currency === currency) return flow;
+            if(currency && Number.isFinite(flow.fxRate) && flow.fxRate>0){
+                return {...flow,amount:flow.amount*flow.fxRate,currency};
+            }
+            throw new Error("出入金币种无法与净值核对，请补充净值 CurrencyPrimary 及本位币现金流水或 FXRateToBase；不会混加不同币种。");
+        });
+    }
+    if(flows.some(flow=>!Number.isFinite(flow.amount))) throw new Error("出入金本位币金额超出有效数值范围。");
+    for(const summary of summaries){
+        if(summary.currency && summary.currency !== currency) throw new Error("出入金汇总币种与净值不同，无法核对。");
+        const total = flows.filter(flow=>flow.date>=summary.from && flow.date<=summary.to)
+            .reduce((sum,flow)=>sum+flow.amount,0);
+        if(!Number.isFinite(total)) throw new Error("出入金合计超出有效数值范围。");
+        if(Math.abs(total-summary.amount)>0.02){
+            // 仅兼容整组收支全为零且两份逐笔来源已核对的异常汇总；其他差异仍拒绝导入。
+            if(summary.isZeroPlaceholder && useLedger && hasTransactions){
+                warnings.push(`${summary.from.toLocaleDateString("zh-CN")} — ${summary.to.toLocaleDateString("zh-CN")} 的收支汇总全部为 0，但本位币现金流水净入金为 ${total.toLocaleString("zh-CN",{maximumFractionDigits:2})} ${currency}。已按与出入金明细核对的现金流水计算，未使用该异常汇总；请重新导出正确汇总核实。`);
+            }else{
+                throw new Error("逐笔出入金与 DepositsWithdrawals 汇总不一致，请补齐流水；汇总金额不会重复计入。");
+            }
+        }
+    }
+    return {flows:flows.slice().sort((a,b)=>a.date-b.date),currency,currencyFromLedger,useLedger,warnings,crossCurrencyUnchecked,
+        available:hasLedger || hasTransactions};
+}
+
+function normalizeTransfers(transfers, currency){
+    const seen = new Set();
+    return transfers.map(transfer=>{
+        const key = transfer.id ? "id:"+transfer.id : JSON.stringify([
+            transfer.date.getTime(),transfer.symbol,transfer.direction,transfer.quantity,transfer.amount,transfer.currency]);
+        if(seen.has(key)) throw new Error("存在重复或无法区分的证券转移记录，请去除重复数据或提供不同的 TransactionID。");
+        seen.add(key);
+        let rate = 1;
+        if(!currency) throw new Error("证券转移无法确认净值币种，请补充净值 CurrencyPrimary。");
+        if(transfer.currency !== currency){
+            if(!Number.isFinite(transfer.fxRate) || transfer.fxRate<=0) throw new Error("证券转移币种与净值不同，请提供本位币 PositionAmount 或 FXRateToBase。");
+            rate = transfer.fxRate;
+        }
+        const amount = transfer.amount*rate;
+        if(!Number.isFinite(amount) || amount===0) throw new Error("证券转移的本位币市值无效。");
+        return {...transfer,amount,currency,kind:"security"};
+    });
+}
+
+function applyExternalFlows(rows, cashFlows, transfers){
+    const flows = [...cashFlows,...transfers].sort((a,b)=>a.date-b.date);
+    rows.forEach(row=>Object.assign(row,{cashIn:0,cashOut:0,cashEntries:[],securityIn:0,securityOut:0,transferEntries:[],externalIn:0,externalOut:0,previousNav:null,pnl:null,returnRate:null,idle:false,baseline:false,reviewRequired:false}));
+    let index = 0, outside = 0;
+    for(const flow of flows){
+        if(flow.date<rows[0].date || flow.date>rows[rows.length-1].date){ outside++; continue; }
+        while(index<rows.length-1 && rows[index].date<flow.date) index++;
+        const row = rows[index];
+        if(flow.kind === "security"){
+            if(flow.amount>0) row.securityIn += flow.amount;
+            else row.securityOut -= flow.amount;
+            row.transferEntries.push(flow);
+        }else{
+            if(flow.amount>0) row.cashIn += flow.amount;
+            else row.cashOut -= flow.amount;
+            row.cashEntries.push(flow);
+        }
+        row.externalIn = row.cashIn + row.securityIn;
+        row.externalOut = row.cashOut + row.securityOut;
+        if(!Number.isFinite(row.externalIn) || !Number.isFinite(row.externalOut)) throw new Error("现金及证券转移合计超出有效数值范围。");
+    }
+    rows[0].baseline = true;
+    for(let i=1;i<rows.length;i++){
+        const row = rows[i], previous = rows[i-1];
+        row.previousDate = previous.date;
+        row.previousNav = previous.nav;
+        // 现金和证券统一按流入期初、流出期末估算；转移本金不算盈利，原始净值不变。
+        row.pnl = row.nav - previous.nav - row.externalIn + row.externalOut;
+        const capital = previous.nav + row.externalIn;
+        const endingCapital = row.nav + row.externalOut;
+        if(!Number.isFinite(row.pnl) || !Number.isFinite(capital) || !Number.isFinite(endingCapital)) throw new Error("净值或资金转移合计超出有效数值范围。");
+        row.idle = previous.nav===0 && row.nav===0 && row.externalIn===0 && row.externalOut===0;
+        if(capital>0 && endingCapital>=0){
+            const rate = row.pnl/capital;
+            if(Number.isFinite(rate)) row.returnRate = rate;
+        }
+        // 只提示异常，不把大幅涨跌自动改成入金，也不据此虚构证券转入市值。
+        row.reviewRequired = Number.isFinite(row.returnRate) && Math.abs(row.returnRate)>1;
+    }
+    return outside;
+}
+
+// YYYYMMDD 字符串/数字解析日期
+function parseYmdNumber(num){
+    const s = String(num).trim();
+    if(!/^\d{8}$/.test(s)) return null;
+    const y = parseInt(s.slice(0,4),10);
+    const m = parseInt(s.slice(4,6),10);
+    const d = parseInt(s.slice(6,8),10);
+    const dt = new Date(y,m-1,d);
+    if(dt.getFullYear() !== y || dt.getMonth() !== m-1 || dt.getDate() !== d) return null;
+    return dt;
+}
+
+function parseReportDate(value, date1904){
+    if(value instanceof Date){
+        return Number.isNaN(value.getTime()) ? null : new Date(value.getFullYear(), value.getMonth(), value.getDate());
+    }
+    const text = String(value ?? "").trim().split(";")[0];
+    if(!text) return null;
+    if(/^\d{8}$/.test(text)) return parseYmdNumber(text);
+    const parts = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T].*)?$/);
+    if(parts) return parseYmdNumber(parts[1] + parts[2].padStart(2,"0") + parts[3].padStart(2,"0"));
+    if(typeof value === "number" || /^\d{1,5}(?:\.\d+)?$/.test(text)){
+        const serial = Number(value);
+        if(!Number.isFinite(serial)) return null;
+        const parts = XLSX.SSF.parse_date_code(serial, {date1904});
+        if(!parts) return null;
+        return parseYmdNumber(String(parts.y).padStart(4,"0") + String(parts.m).padStart(2,"0") + String(parts.d).padStart(2,"0"));
+    }
+    return null;
+}
+
+function parseReportNumber(value){
+    if(typeof value === "number") return Number.isFinite(value) ? value : null;
+    const text = String(value ?? "").trim().replace(/,/g, "");
+    if(!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(text)) return null;
+    const number = Number(text);
+    return Number.isFinite(number) ? number : null;
+}
+
+function normalizeHeader(value){
+    return String(value ?? "").replace(/^\uFEFF/, "").trim().toLowerCase();
+}
+
+document.getElementById("file-input").addEventListener("change",async function(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    this.disabled = true;
+    try{
+        if(typeof XLSX === "undefined") throw new Error("Excel/CSV 解析库未加载，请检查网络后刷新页面。");
+        // CSV 保留原始字段，避免日期、账户号被自动转换；引号和逗号交给解析库处理。
+        const wb = /\.csv$/i.test(file.name)
+            ? XLSX.read((await file.text()).replace(/^\uFEFF/, ""), {type:"string", raw:true})
+            : XLSX.read(await file.arrayBuffer(), {type:"array"});
+        const nextDailyData = [];
+        const nextSymbolList = [], nextFifoList = [], securityTransfers = [];
+        const fifoKeys = new Set();
+        const cashLedger = [], cashTransactions = [], cashSummaries = [], ledgerBalances = [], fxTrades = [];
+        const ledgerCurrencies = new Set(), accounts = new Set();
+        let foundLedgerHeader = false, foundCashHeader = false, foundTransferHeader = false;
+        const currencies = new Set();
+        const date1904 = !!wb.Workbook?.WBProps?.date1904;
+        let foundNavHeader = false;
+
+        for(const sheetName of wb.SheetNames){
+            const sheet = wb.Sheets[sheetName];
+            if(!sheet || !sheet['!ref']) continue;
+            const range = XLSX.utils.decode_range(sheet['!ref']);
+            // 关键兼容：扫描sheet原始行，自动寻找表头行，跳过前面用户名/备注行
+            const rows = XLSX.utils.sheet_to_json(sheet, {header:1, raw:true, defval:"", blankrows:true});
+            let headers = [];
+            let section = null;
+
+            for(let i=0; i<rows.length; i++){
+                const cells = rows[i];
+                const fields = cells.map(normalizeHeader);
+                if(fields.every(value=>value === "")) continue;
+                const isNavHeader = ["reportdate", "total", "totallong"].every(key=>fields.includes(key));
+                const isSymbolHeader = ["symbol", "assetclass", "total"].every(key=>fields.includes(key));
+                const isFifoHeader = ["symbol", "assetclass", "totalrealizedpnl", "totalunrealizedpnl", "totalfifopnl"].every(key=>fields.includes(key));
+                const isTransferHeader = ["date", "symbol", "direction", "quantity", "positionamount", "currencyprimary"].every(key=>fields.includes(key));
+                const isTradeHeader = ["symbol", "tradedate", "buy/sell", "quantity", "tradeprice", "proceeds", "currencyprimary", "assetclass"].every(key=>fields.includes(key));
+                const isLedgerHeader = ["date", "activitydescription", "debit", "credit", "balance", "currencyprimary"].every(key=>fields.includes(key));
+                const isCashHeader = ["date/time", "type", "amount", "currencyprimary"].every(key=>fields.includes(key));
+                const isCashSummary = ["fromdate", "todate", "depositswithdrawals"].every(key=>fields.includes(key));
+                const isOtherHeader = fields.includes("clientaccountid") || fields.includes("reportdate") ||
+                    (fields.includes("fromdate") && fields.includes("todate"));
+                const isTransferCandidate = fields.includes("positionamount") || fields.includes("transferprice") || (fields.includes("direction") && fields.includes("symbol"));
+                if(isTransferCandidate && !isTransferHeader) throw new Error("证券转移表头需包含 Date / Symbol / Direction / Quantity / PositionAmount / CurrencyPrimary，不能忽略不完整的转移段。");
+                const isFifoCandidate = ["totalrealizedpnl","totalunrealizedpnl","totalfifopnl"].some(key=>fields.includes(key));
+                if(isFifoCandidate && !isFifoHeader) throw new Error("FIFO 表头需包含 Symbol / AssetClass / TotalRealizedPnl / TotalUnrealizedPnl / TotalFifoPnl，不能忽略不完整的标的段。");
+                if(isNavHeader || isSymbolHeader || isFifoHeader || isTransferHeader || isTradeHeader || isLedgerHeader || isCashHeader || isCashSummary || isOtherHeader){
+                    headers = fields;
+                    section = isNavHeader ? "nav" : isSymbolHeader ? "symbol" : isFifoHeader ? "fifo" : isTransferHeader ? "transfer" : isTradeHeader ? "trade" : isLedgerHeader ? "ledger" : isCashHeader ? "cash" : isCashSummary ? "cashSummary" : null;
+                    if(isNavHeader) foundNavHeader = true;
+                    if(isLedgerHeader) foundLedgerHeader = true;
+                    if(isCashHeader) foundCashHeader = true;
+                    if(isTransferHeader) foundTransferHeader = true;
+                    continue;
+                }
+                if(!section) continue;
+                const get = key => cells[headers.indexOf(key)] ?? "";
+                const position = `工作表「${sheetName}」第 ${range.s.r+i+1} 行`;
+                const account = String(get("clientaccountid")).trim();
+                if(account) accounts.add(account);
+
+                // 每日净值数据块
+                if(section === "nav"){
+                    const date = parseReportDate(get("reportdate"), date1904);
+                    const nav = parseReportNumber(get("total"));
+                    const totalLong = parseReportNumber(String(get("totallong")).trim() || "0");
+                    const totalShort = parseReportNumber(String(get("totalshort")).trim() || "0");
+                    if(!date || nav === null || totalLong === null || totalShort === null){
+                        throw new Error(`${position}的净值日期或金额无效，请检查 ReportDate / Total / TotalLong / TotalShort。`);
+                    }
+                    const currency = String(get("currencyprimary")).trim().toUpperCase();
+                    if(currency) currencies.add(currency);
+                    nextDailyData.push({date, nav, totalLong, totalShort, cash:parseReportNumber(get("cash"))});
+                }
+                // 持仓标的块
+                if(section === "symbol" || section === "fifo"){
+                    const symbol = String(get("symbol")).trim();
+                    const assetClass = String(get("assetclass")).trim();
+                    // 利息和总盈亏汇总行没有标的，不放入标的排行，也不当作每日净值。
+                    if(!symbol || !assetClass) continue;
+                    const isFifo = section === "fifo";
+                    const total = parseReportNumber(get(isFifo ? "totalfifopnl" : "total"));
+                    if(total === null) throw new Error(`${position}的标的盈亏不是有效数字。`);
+                    const item = {symbol,desc:String(get("description")),assetClass,total,currency:String(get("currencyprimary")).trim().toUpperCase()};
+                    if(isFifo){
+                        item.realized = parseReportNumber(get("totalrealizedpnl"));
+                        item.unrealized = parseReportNumber(get("totalunrealizedpnl"));
+                        const sum = item.realized + item.unrealized;
+                        if(item.realized===null || item.unrealized===null || !Number.isFinite(sum) || Math.abs(sum-total)>0.02) throw new Error(`${position}的 FIFO 已实现、未实现与合计盈亏不一致。`);
+                        const key = JSON.stringify([account,assetClass,symbol,item.currency]);
+                        if(fifoKeys.has(key)) throw new Error("同一标的存在多条 FIFO 汇总，不能把不同日期的未实现盈亏快照相加。");
+                        fifoKeys.add(key);
+                        nextFifoList.push(item);
+                    }else nextSymbolList.push(item);
+                }
+                if(section === "trade"){
+                    const symbol = String(get("symbol")).trim().toUpperCase();
+                    const assetClass = String(get("assetclass")).trim().toUpperCase();
+                    if(symbol!=="USD.HKD" || assetClass!=="CASH") continue;
+                    const date = parseReportDate(get("tradedate"),date1904);
+                    const side = String(get("buy/sell")).trim().toUpperCase();
+                    const quantity = parseReportNumber(get("quantity"));
+                    const price = parseReportNumber(get("tradeprice"));
+                    const proceeds = parseReportNumber(get("proceeds"));
+                    const currency = String(get("currencyprimary")).trim().toUpperCase();
+                    if(!date || !["BUY","SELL"].includes(side) || quantity===null || price===null || price<=0 || proceeds===null || currency!=="HKD"){
+                        throw new Error(`${position}的 USD.HKD 交易日期、方向、数量、价格、港元支出或币种无效。`);
+                    }
+                    const expected = -quantity*price;
+                    if((side==="BUY" ? quantity<=0 || proceeds>=0 : quantity>=0 || proceeds<=0) ||
+                        !Number.isFinite(expected) || Math.abs(expected-proceeds)>0.01){
+                        throw new Error(`${position}的 USD.HKD 数量、方向与 Proceeds 不一致，不能用于入金估算。`);
+                    }
+                    // Quantity 是美元数量，Proceeds 是港元收支；交易自身不作为外部流量，佣金不再扣一次。
+                    fxTrades.push({account,date,side,quantity,price,proceeds,time:String(get("datetime")).trim(),
+                        id:String(get("tradeid") || get("transactionid")).trim()});
+                }
+                if(section === "transfer"){
+                    const date = parseReportDate(get("date"),date1904);
+                    const symbol = String(get("symbol")).trim();
+                    const direction = String(get("direction")).trim().toUpperCase();
+                    const quantity = parseReportNumber(get("quantity"));
+                    const value = parseReportNumber(get("positionamount"));
+                    const currency = String(get("currencyprimary")).trim().toUpperCase();
+                    if(!date || !symbol || !["IN","OUT"].includes(direction) || quantity===null || value===null || !currency) throw new Error(`${position}的证券转移日期、方向、数量、市值或币种无效。`);
+                    if(!((quantity>0 && value>0) || (direction==="OUT" && quantity<0 && value<0))) throw new Error(`${position}的证券转移市值为零或方向不明确，暂不支持空头证券转移，请核对 Quantity 与 PositionAmount。`);
+                    // PositionAmount 是整笔转移市值，不能再乘数量；TransferPrice 为 0 也不丢弃，PnlAmount 不重复计入收益。
+                    securityTransfers.push({date,symbol,direction,quantity:Math.abs(quantity),amount:(direction==="IN" ? 1 : -1)*Math.abs(value),currency,
+                        fxRate:parseReportNumber(get("fxratetobase")),id:String(get("transactionid")).trim()});
+                }
+                if(section === "ledger"){
+                    const currency = String(get("currencyprimary")).trim().toUpperCase();
+                    if(currency) ledgerCurrencies.add(currency);
+                    const description = String(get("activitydescription")).trim();
+                    if(/^(starting|ending) balance$/i.test(description)){
+                        const date = parseReportDate(get("date"),date1904);
+                        const amount = parseReportNumber(get("balance"));
+                        if(date && amount !== null && currency) ledgerBalances.push({date,amount,currency});
+                        continue;
+                    }
+                    if(!/^(electronic fund transfer|wire transfer|cash transfer|internal transfer|deposit|withdrawal|deposits\/withdrawals|cash receipt|cash disbursement)$/i.test(description)){
+                        if(!String(get("symbol")).trim() && /transfer|deposit|withdrawal/i.test(description)) throw new Error(`${position}存在未识别的资金转移类型，请补充标准出入金明细。`);
+                        continue;
+                    }
+                    const date = parseReportDate(get("date"),date1904);
+                    const debit = parseReportNumber(String(get("debit")).trim() || "0");
+                    const credit = parseReportNumber(String(get("credit")).trim() || "0");
+                    if(!date || debit===null || credit===null || !currency) throw new Error(`${position}的现金流水日期、金额或币种无效。`);
+                    if(credit<0 || (debit!==0 && credit!==0)) throw new Error(`${position}的出入金借贷方向不明确，请提供逐笔带正负号的标准明细。`);
+                    const amount = credit-Math.abs(debit);
+                    if(amount) cashLedger.push({date,amount,currency});
+                }
+                if(section === "cash"){
+                    const type = String(get("type")).trim();
+                    // 股息、利息、手续费、买卖和换汇已经反映在净值里，不能当作外部资金再次扣除。
+                    if(!/^deposits\s*\/\s*withdrawals$/i.test(type)){
+                        if(/transfer|deposit|withdrawal/i.test(type)) throw new Error(`${position}存在未支持的转入转出类型，需补充相应本位币金额。`);
+                        continue;
+                    }
+                    const date = parseReportDate(get("date/time"),date1904);
+                    const amount = parseReportNumber(get("amount"));
+                    const currency = String(get("currencyprimary")).trim().toUpperCase();
+                    if(!date || amount===null || !currency) throw new Error(`${position}的出入金日期、金额或币种无效。`);
+                    if(amount) cashTransactions.push({account,date,amount,currency,fxRate:parseReportNumber(get("fxratetobase"))});
+                }
+                if(section === "cashSummary"){
+                    const from = parseReportDate(get("fromdate"),date1904), to = parseReportDate(get("todate"),date1904);
+                    const amount = parseReportNumber(get("depositswithdrawals"));
+                    if(!from || !to || from>to || amount===null) throw new Error(`${position}的出入金汇总无效。`);
+                    const zeroFields = ["realized","changeinunrealized","depositswithdrawals","dividends","interest","commissions","brokerfees","otherfees"];
+                    const optionalZeroFields = ["withholdingtax","transactiontax"].filter(key=>headers.includes(key));
+                    const isZeroPlaceholder = zeroFields.every(key=>headers.includes(key) && parseReportNumber(get(key))===0) && optionalZeroFields.every(key=>parseReportNumber(get(key))===0);
+                    cashSummaries.push({from,to,amount,isZeroPlaceholder,currency:String(get("currencyprimary")).trim().toUpperCase()});
+                }
+            }
+        }
+
+        if(nextDailyData.length === 0){
+            throw new Error(foundNavHeader
+                ? "已找到每日净值表头，但没有有效数据行。"
+                : "未找到每日净值数据块，需在同一表头行包含 ReportDate / Total / TotalLong（可带账户前缀列）。");
+        }
+        if(currencies.size > 1) throw new Error("报表包含多种净值币种，请导出统一币种的报表。");
+        if(accounts.size > 1) throw new Error("报表包含多个账户，请导出单个账户，避免跨账户出入金重复计算。");
+        nextDailyData.sort((a,b)=>a.date.getTime()-b.date.getTime());
+
+        for(let i=1;i<nextDailyData.length;i++){
+            if(nextDailyData[i].date.getTime() === nextDailyData[i-1].date.getTime()){
+                throw new Error("同一日期存在多条净值记录，请导出单个账户、单一币种的每日净值，避免重复计算。");
+            }
+        }
+        const cashResult = reconcileCashFlows(nextDailyData,cashLedger,cashTransactions,ledgerCurrencies,ledgerBalances,
+            cashSummaries,currencies.values().next().value,foundLedgerHeader,foundCashHeader,fxTrades);
+        const transfers = normalizeTransfers(securityTransfers,cashResult.currency);
+        applyExternalFlows(nextDailyData,cashResult.flows,transfers);
+        const nextSymbolBasis = nextSymbolList.length ? "MTM" : "FIFO";
+        const selectedSymbols = nextSymbolList.length ? nextSymbolList : nextFifoList;
+        if(selectedSymbols.some(item=>item.currency && (!cashResult.currency || item.currency!==cashResult.currency))) throw new Error("标的盈亏币种与净值无法统一，请导出本位币标的盈亏，避免混合币种排行。");
+        const nextSymbolNote = [nextSymbolBasis === "FIFO"
+            ? "总盈亏 = 已实现盈亏 + 期末未实现盈亏，采用先进先出（FIFO）口径的报表值 TotalFifoPnl；不是期间未实现盈亏变动，不与 MTM 或账户净值收益叠加，也不重复扣佣金。"
+            : "MTM 口径：采用报表逐标的 Total；若同时存在 FIFO 段，仅展示 MTM，避免重复累计。",
+            selectedSymbols.some(item=>!item.currency) ? "标的段未标注币种，金额按报表原值展示，不能确认与页头币种相同。" : "",
+            "排行仅反映该段报表口径；转入证券的历史成本盈亏不等于转入后账户收益。"].filter(Boolean).join(" ");
+        const transferIn = transfers.filter(flow=>flow.amount>0).reduce((sum,flow)=>sum+flow.amount,0);
+        const transferOut = transfers.filter(flow=>flow.amount<0).reduce((sum,flow)=>sum-flow.amount,0);
+        if(!Number.isFinite(transferIn) || !Number.isFinite(transferOut)) throw new Error("证券转移合计超出有效数值范围。");
+        // 汇总整份报表已识别的本位币流水，包含基准日和净值区间外记录；流入、流出分别累计。
+        const cashIn = cashResult.flows.filter(flow=>flow.amount>0).reduce((sum,flow)=>sum+flow.amount,0);
+        const cashOut = cashResult.flows.filter(flow=>flow.amount<0).reduce((sum,flow)=>sum-flow.amount,0);
+        if(!Number.isFinite(cashIn) || !Number.isFinite(cashOut)) throw new Error("现金出入金合计超出有效数值范围。");
+        const hasFxEstimates = cashResult.flows.some(flow=>flow.fxEstimate);
+        const nextFlowSummary = [[hasFxEstimates ? "入金（含换汇估算）" : "入金",cashIn],["出金",cashOut],["转入证券金额",transferIn],["转出证券金额",transferOut]]
+            .filter(([,amount])=>amount>0)
+            .map(([label,amount])=>({label,value:amount<0.01 ? "<0.01" : amount.toLocaleString("zh-CN",{minimumFractionDigits:2,maximumFractionDigits:2})}));
+
+        // 完整解析成功后再替换数据，失败时保留当前报表。
+        dailyData = nextDailyData;
+        symbolList = selectedSymbols;
+        symbolBasis = nextSymbolBasis;
+        symbolNote = nextSymbolNote;
+        hasCashFlowData = cashResult.available;
+        hasTransferData = foundTransferHeader;
+        reportWarning = cashResult.warnings.length ? "收支汇总异常，按已核对的逐笔流水计算，仍待对账" : "";
+        const currency = cashResult.currency;
+        const currencyLabel = document.getElementById("currencyLabel");
+        currencyLabel.textContent = "金额单位：" + (currency || "报表未提供");
+        currencyLabel.classList.remove("hide");
+        renderReportOverview();
+        const overviewTitle = document.getElementById("reportOverviewTitle");
+        overviewTitle.textContent = hasFxEstimates ? "报表概览 · 含换汇估算" : "报表概览";
+        overviewTitle.title = hasFxEstimates ? "部分港元入金按实际换汇买入美元估算，回填至原入金日；非 IBKR 入金日折算口径，换汇与原币入金不重复累计。" : "";
+        const flowItems = document.getElementById("reportFlowItems");
+        flowItems.replaceChildren();
+        nextFlowSummary.forEach(({label,value})=>{
+            const item = document.createElement("div");
+            item.className = "report-flow-item";
+            const term = document.createElement("dt");
+            term.textContent = label;
+            const amount = document.createElement("dd");
+            amount.textContent = value;
+            item.append(term,amount);
+            flowItems.appendChild(item);
+        });
+        document.getElementById("reportFlows").classList.toggle("hide",nextFlowSummary.length===0);
+        emptyPage.classList.add("hide");
+        usageGuideBtn.classList.remove("hide");
+        setUsageGuideVisible(false);
+        mainPage.classList.remove("hide");
+        const today = new Date();
+        currentYear = today.getFullYear();
+        currentMonth = today.getMonth();
+        closeModal();
+        document.querySelector('[data-view="calendar"]').click();
+
+    }catch(err){
+        console.error(err);
+        alert("文件解析异常："+err.message);
+    }finally{
+        this.disabled = false;
+        this.value = "";
+    }
+});
+
+document.querySelectorAll(".tab-bar button").forEach(btn=>{
+    btn.onclick = function(){
+        document.querySelectorAll(".tab-bar button").forEach(b=>b.classList.remove("active"));
+        this.classList.add("active");
+        const v = this.dataset.view;
+        ["calendar","year","history","analysis"].forEach(k=>document.getElementById("view-"+k).classList.add("hide"));
+        document.getElementById("view-"+v).classList.remove("hide");
+        if(v==="calendar") renderCalendar();
+        if(v==="year") renderYear();
+        if(v==="history") renderYearHistory();
+        if(v==="analysis") renderAnalysis();
+    }
+})
+
+document.querySelectorAll('input[name="colorMode"]').forEach(r=>{
+    r.onchange = function(){
+        colorMode = this.value;
+        renderReportOverview();
+        renderCalendar();
+    }
+})
+
+document.getElementById("prevMonthBtn").onclick = ()=>{
+    currentMonth--;
+    if(currentMonth<0){currentMonth=11;currentYear--;}
+    renderCalendar();
+}
+document.getElementById("nextMonthBtn").onclick = ()=>{
+    currentMonth++;
+    if(currentMonth>11){currentMonth=0;currentYear++;}
+    renderCalendar();
+}
+document.getElementById("prevYearBtn").onclick = ()=>{
+    currentYear--;
+    renderYear();
+}
+document.getElementById("nextYearBtn").onclick = ()=>{
+    currentYear++;
+    renderYear();
+}
+
+function renderCalendar(){
+    const y = currentYear, m = currentMonth;
+    document.getElementById("monthTitle").innerText = `${y}年${m+1}月`;
+    const first = new Date(y,m,1);
+    let startWeek = first.getDay()||7;
+    const monthData = dailyData.filter(d=>d.date.getFullYear()===y && d.date.getMonth()===m);
+    const summary = summarizePeriod(monthData);
+    const monthPnl = summary.pnl;
+    const tradeDays = monthData.length;
+
+    document.getElementById("monthOverview").className = "summary-card " + getPnlTone(monthPnl);
+    document.getElementById("kpiMonthPnl").innerText = tradeDays ? formatPnlAmount(monthPnl) : "—";
+    document.getElementById("kpiMonthReturn").innerText = formatReturnRate(summary.returnRate);
+    document.getElementById("kpiMonthReturn").className = "summary-rate " + getPnlTone(summary.returnRate);
+    document.getElementById("monthCoverage").textContent = periodCoverage(monthData);
+    document.getElementById("monthCalculationNote").textContent = summary.note;
+    document.getElementById("monthNotes").classList.toggle("hide", !summary.note);
+    document.getElementById("monthCalendarHint").innerText = tradeDays ? "点击日期查看明细" : "本月暂无报表数据";
+
+    const bodyDom = document.getElementById("calendarBody");
+    bodyDom.innerHTML = "";
+    const daysInMonth = new Date(y,m+1,0).getDate();
+    for(let d=1;d<=daysInMonth;d++){
+        const cellDate = new Date(y,m,d);
+        const found = dailyData.find(item=>item.date.getTime() === cellDate.getTime());
+        const cell = document.createElement("div");
+        cell.className = "day-cell";
+        if(d === 1) cell.style.gridColumnStart = String(startWeek);
+        if(!found){
+            cell.classList.add("no-data");
+            cell.innerHTML = `<div class="day-number">${d}</div>`;
+        }else{
+            const p = found.pnl;
+            cell.classList.add(getPnlTone(p));
+            cell.title = found.baseline ? "首条净值仅作基准，缺少上一条记录" : found.reviewRequired ? "大幅净值变动，需核对现金及证券转移" : "点击查看现金、证券转移与计算区间";
+            cell.innerHTML = `
+                <div class="day-number">${d}</div>
+                <div class="day-pnl-text">${Number.isFinite(p) ? (p>=0?"+":"")+Number(p.toFixed(0)) : "—"}</div>
+                <div class="day-return-text" title="日收益率估算">${formatDailyReturn(found)}</div>
+            `;
+            cell.onclick = ()=>openModal(found);
+        }
+        bodyDom.appendChild(cell);
+    }
+}
+
+function renderYearHistory(){
+    // 历年卡片与年度详情统一以期间盈亏除以投入本金，使用相同的期初基准及流入范围。
+    const totals = new Map();
+    dailyData.forEach(row=>{
+        const year = row.date.getFullYear();
+        if(!totals.has(year)) totals.set(year, {year,rows:[]});
+        totals.get(year).rows.push(row);
+    });
+    const years = Array.from(totals.values()).map(item=>({...item,...summarizePeriod(item.rows)})).sort((a,b)=>b.year-a.year);
+    const grid = document.getElementById("yearHistoryGrid");
+    grid.innerHTML = "";
+    if(!years.length){
+        const empty = document.createElement("p");
+        empty.className = "year-history-note";
+        empty.textContent = "暂无年度数据";
+        grid.appendChild(empty);
+        return;
+    }
+    years.forEach(item=>{
+        const selected = item.year === currentYear;
+        const amount = formatPnlAmount(item.pnl);
+        const ret = formatReturnRate(item.returnRate);
+        const state = item.pnl === null ? "仅基准" : item.pnl > 0 ? "盈利" : item.pnl < 0 ? "亏损" : "持平";
+        const first = item.rows[0].previousDate || item.rows[0].date;
+        const last = item.rows[item.rows.length-1].date;
+        const coverage = periodCoverage(item.rows);
+        const card = document.createElement("button");
+        card.type = "button";
+        card.dataset.year = String(item.year);
+        card.className = "year-month-card " + getPnlTone(item.pnl);
+        card.classList.toggle("is-selected", selected);
+        card.setAttribute("aria-pressed", String(selected));
+        card.setAttribute("aria-label", `${item.year}年，${state}，盈亏${amount}，估算收益率${ret}，${coverage}，查看年度明细`);
+        card.innerHTML = `
+            <span class="year-month-name">${item.year} <span class="year-month-link" aria-hidden="true">›</span></span>
+            <span class="year-month-amount">${amount}</span>
+            <span class="year-month-state">${state}</span>
+            <span class="period-return ${getPnlTone(item.returnRate)}" title="年收益率：期间盈亏金额 ÷（期初净值 + 期间现金入金 + 证券转入市值）；出金和证券转出不扣分母，不按投入天数加权，非年化；本金无效时显示“—”"><span class="period-return-label">估算</span><strong>${ret}</strong></span>
+            <span class="year-history-coverage" title="${coverage}"><span>${first.toLocaleDateString("zh-CN")}</span><span>— ${last.toLocaleDateString("zh-CN")}</span></span>
+        `;
+        card.onclick = ()=>{
+            currentYear = item.year;
+            const yearTab = document.querySelector('[data-view="year"]');
+            yearTab.click();
+            yearTab.focus({preventScroll:true});
+        };
+        grid.appendChild(card);
+    });
+}
+
+function renderYear(){
+    document.getElementById("yearTitle").innerText = `${currentYear} 年度收益`;
+    const yData = dailyData.filter(d=>d.date.getFullYear()===currentYear);
+    const summary = summarizePeriod(yData);
+    const totalPnl = summary.pnl;
+    const tradeDays = yData.length;
+    const ret = formatReturnRate(summary.returnRate);
+    // 仅对展示金额取整，年度汇总仍使用原始精度；配色跟随日历设置。
+    document.getElementById("yearOverview").className = "summary-card " + getPnlTone(totalPnl);
+    document.getElementById("yearTotalPnl").innerText = tradeDays ? formatPnlAmount(totalPnl) : "—";
+    document.getElementById("yearReturn").innerText = tradeDays ? ret : "—";
+    document.getElementById("yearReturn").className = "summary-rate " + getPnlTone(summary.returnRate);
+    document.getElementById("yearCoverage").textContent = periodCoverage(yData);
+
+    const grid = document.getElementById("yearMonthGrid");
+    grid.innerHTML = "";
+    for(let mi=0;mi<12;mi++){
+        const md = yData.filter(d=>d.date.getMonth()===mi);
+        const monthSummary = summarizePeriod(md);
+        const sumPnl = monthSummary.pnl;
+        const hasData = md.length > 0;
+        const state = !hasData ? "暂无数据" : sumPnl === null ? "仅基准" : sumPnl > 0 ? "盈利" : sumPnl < 0 ? "亏损" : "持平";
+        const amount = hasData ? formatPnlAmount(sumPnl) : "—";
+        const monthReturn = formatReturnRate(monthSummary.returnRate);
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "year-month-card " + getPnlTone(sumPnl);
+        card.classList.toggle("no-data", !hasData);
+        card.classList.toggle("is-selected", mi === currentMonth);
+        card.setAttribute("aria-pressed", String(mi === currentMonth));
+        card.setAttribute("aria-label", `${currentYear}年${mi+1}月，${state}${hasData ? "，盈亏"+amount+"，估算月收益率"+monthReturn : ""}，查看日历`);
+        card.innerHTML = `
+            <span class="year-month-name">${mi+1}月 <span class="year-month-link" aria-hidden="true">›</span></span>
+            <span class="year-month-amount">${amount}</span>
+            <span class="year-month-state">${state}</span>
+            <span class="period-return ${getPnlTone(monthSummary.returnRate)}" title="月收益率：期间盈亏金额 ÷（期初净值 + 期间现金入金 + 证券转入市值）；出金和证券转出不扣分母，不按投入天数加权，非年化；本金无效时显示“—”"><span class="period-return-label">估算</span><strong>${monthReturn}</strong></span>
+        `;
+        card.onclick = ()=>{
+            currentMonth = mi;
+            document.querySelector('[data-view="calendar"]').click();
+        }
+        grid.appendChild(card);
+    }
+}
+
+function renderAnalysis(){
+    const summary = summarizePeriod(dailyData);
+    document.getElementById("analysisWinRate").textContent = Number.isFinite(summary.winRate)
+        ? (summary.winRate*100).toFixed(1)+"%" : "—";
+    initCharts();
+    document.getElementById("analysisRange").textContent = dailyData.length
+        ? `整份报表 · ${dailyData[0].date.toLocaleDateString()} — ${dailyData[dailyData.length-1].date.toLocaleDateString()} · 不受月份筛选影响`
+        : "暂无报表数据";
+    const isFifo = symbolBasis === "FIFO";
+    const columns = isFifo ? ["代码","总盈亏","已实现盈亏","未实现盈亏"] : ["代码","MTM 合计"];
+    document.getElementById("symbolTable").classList.toggle("fifo-table",isFifo);
+    const isAmountColumn = index=>index>0;
+    document.getElementById("symbolCount").textContent = `${symbolList.length} 条记录 · ${isFifo ? "已实现 + 期末未实现 · 按总盈亏排序" : "MTM 口径 · 按合计排序"}`;
+    document.getElementById("symbolBasisNote").textContent = symbolList.length ? symbolNote : "报表需包含逐标的 MTM Total 或 FIFO 盈亏字段；资产类别汇总和买卖金额不能替代标的盈亏。";
+    const head = document.querySelector("#symbolTable thead tr");
+    head.innerHTML = "";
+    columns.forEach((label,index)=>{
+        const th = document.createElement("th");
+        th.scope = "col";
+        th.textContent = label;
+        if(isAmountColumn(index)) th.className = "amount-heading";
+        else th.className = "symbol-column";
+        head.appendChild(th);
+    });
+    const tb = document.querySelector("#symbolTable tbody");
+    tb.innerHTML = "";
+    if(!symbolList.length){
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = columns.length;
+        td.className = "table-empty";
+        td.textContent = "报表中暂无标的盈亏记录";
+        tr.appendChild(td);
+        tb.appendChild(tr);
+    }
+    symbolList.sort((a,b)=>b.total - a.total);
+    symbolList.forEach(s=>{
+        const tr = document.createElement("tr");
+        const values = isFifo ? [s.symbol,s.total,s.realized,s.unrealized] : [s.symbol,s.total];
+        values.forEach((value, index)=>{
+            const td = document.createElement("td");
+            td.textContent = isAmountColumn(index) ? value.toFixed(2) : value;
+            if(isAmountColumn(index)) td.className = "amount-cell " + getPnlTone(value);
+            else td.className = "symbol-column";
+            tr.appendChild(td);
+        });
+        tb.appendChild(tr);
+    })
+}
+
+function initCharts(){
+    // 图表仅在分析页可见时初始化，重复导入时复用实例。
+    if(typeof echarts === "undefined"){
+        ["chartPnl", "chartNav"].forEach(id=>{
+            document.getElementById(id).textContent = "图表库未加载，请检查网络后刷新页面；净值和标的数据已在本地读取。";
+        });
+        return;
+    }
+    chartPnl = chartPnl || echarts.init(document.getElementById("chartPnl"));
+    chartNav = chartNav || echarts.init(document.getElementById("chartNav"));
+    chartPnl.resize();
+    chartNav.resize();
+    refreshChartData();
+}
+function refreshChartData(){
+    const x = dailyData.map(d=>d.date.toLocaleDateString());
+    const pnlArr = dailyData.map(d=>d.pnl);
+    const navArr = dailyData.map(d=>d.nav);
+    // 仅将坐标轴和提示框金额显示为整数，保留图表原始数据精度。
+    const formatChartNumber = value=>{
+        if(value === null || value === undefined) return "—";
+        const number = Number(value);
+        if(!Number.isFinite(number)) return "—";
+        const rounded = Number(number.toFixed(0));
+        return (rounded === 0 ? 0 : rounded).toLocaleString("zh-CN");
+    };
+    const styles = getComputedStyle(document.documentElement);
+    const toneColors = {};
+    ["pnl-neutral", "pnl-red", "pnl-green"].forEach(tone=>{
+        toneColors[tone] = styles.getPropertyValue("--"+tone).trim();
+    });
+    const commonOption = {
+        title:{show:false},
+        textStyle:{fontFamily:styles.fontFamily,color:"#6e7681"},
+        grid:{left:8,right:12,top:12,bottom:8,containLabel:true},
+        tooltip:{
+            trigger:"axis",confine:true,backgroundColor:"#fff",borderColor:"#e5e6eb",
+            valueFormatter:formatChartNumber,
+            textStyle:{color:"#1f2329",fontSize:12},
+            axisPointer:{type:"line",lineStyle:{color:"#c9cdd4",type:"dashed"}}
+        },
+        xAxis:{
+            type:"category",data:x,
+            axisLine:{lineStyle:{color:"#e5e6eb"}},axisTick:{show:false},
+            axisLabel:{color:"#86909c",fontSize:11,hideOverlap:true}
+        },
+        yAxis:{
+            type:"value",minInterval:1,axisLine:{show:false},axisTick:{show:false},
+            axisLabel:{color:"#86909c",fontSize:11,formatter:formatChartNumber},
+            splitLine:{lineStyle:{color:"#eef0f3",type:"dashed"}}
+        }
+    };
+    chartPnl.setOption({
+        ...commonOption,
+        tooltip:{
+            ...commonOption.tooltip,
+            formatter:params=>{
+                const point = Array.isArray(params) ? params[0] : params;
+                const row = point && dailyData[point.dataIndex];
+                if(!row) return "";
+                const cash = hasCashFlowData ? formatChartNumber(row.cashIn-row.cashOut) : "未提供";
+                const securities = hasTransferData ? formatChartNumber(row.securityIn-row.securityOut) : "未提供";
+                return `${row.date.toLocaleDateString("zh-CN")}<br/>区间盈亏：${formatChartNumber(row.pnl)}<br/>日收益率（估算）：${formatDailyReturn(row)}<br/>现金净入金${row.cashEntries.some(flow=>flow.fxEstimate) ? "（含换汇估算）" : ""}：${cash}<br/>证券净转入市值：${securities}${row.reviewRequired ? "<br/>大幅变动，需核对资金转移" : ""}${reportWarning ? "<br/>"+reportWarning : ""}`;
+            }
+        },
+        series:[{
+            name:"每日盈亏",
+            type:"bar",
+            data:pnlArr,
+            barMaxWidth:24,
+            itemStyle:{
+                color:params=>toneColors[getPnlTone(params.value)],
+                borderRadius:2
+            }
+        }]
+    })
+    chartNav.setOption({
+        ...commonOption,
+        series:[{
+            name:"账户净值",type:"line",data:navArr,smooth:true,
+            showSymbol:navArr.length === 1,symbolSize:6,
+            itemStyle:{color:"#2373e8"},lineStyle:{width:2.5},
+            areaStyle:{color:"#edf4ff",opacity:0.7}
+        }]
+    })
+}
+
+function openModal(row){
+    const wrap = document.getElementById("modalWrap");
+    const cnt = document.getElementById("modalContent");
+    cnt.innerHTML = `
+        <h3>${row.date.toLocaleDateString()}</h3>
+        <div style="margin-top:10px;line-height:1.8">
+            <div>区间盈亏：${formatPnlAmount(row.pnl)}</div>
+            <div>日收益率（估算）：${formatDailyReturn(row)}</div>
+            <div>现金入金：${hasCashFlowData ? formatPnlAmount(row.cashIn) : "未提供"}</div>
+            <div>现金出金：${hasCashFlowData ? formatPnlAmount(row.cashOut) : "未提供"}</div>
+            <div>证券转入市值：${hasTransferData ? formatPnlAmount(row.securityIn) : "未提供"}</div>
+            <div>证券转出市值：${hasTransferData ? formatPnlAmount(row.securityOut) : "未提供"}</div>
+            <div class="cash-details"></div>
+            <div class="transfer-details"></div>
+            <div class="usage-tip">${row.baseline ? "首条仅作基准，当日现金和证券转移仅展示，不计算该日收益" : periodCoverage([row])+"；现金与证券均按流入期初、流出期末估算"}</div>
+            ${row.reviewRequired ? '<div class="period-note">大幅净值变动，请核对现金及证券转移是否完整，收益尚待核对。</div>' : ""}
+            ${reportWarning ? `<div class="period-note">${reportWarning}</div>` : ""}
+            <div>账户净值：${Number(row.nav.toFixed(0))}</div>
+            <div>多头仓位：${Number(row.totalLong.toFixed(0))}</div>
+            <div>空头仓位：${Number(row.totalShort.toFixed(0))}</div>
+        </div>
+    `;
+    const cashDetails = cnt.querySelector(".cash-details");
+    row.cashEntries.forEach(flow=>{
+        const line = document.createElement("div");
+        line.className = "usage-tip";
+        line.textContent = `${flow.date.toLocaleDateString("zh-CN")} ${flow.amount>0 ? "入金" : "出金"}：${Math.abs(flow.amount).toLocaleString("zh-CN",{maximumFractionDigits:flow.fxEstimate ? 8 : 2})} ${flow.currency}`;
+        if(flow.fxEstimate){
+            line.textContent += `（换汇估算；原入金 ${flow.originalAmount.toLocaleString("zh-CN",{maximumFractionDigits:8})} ${flow.originalCurrency}，仅计一次；非 IBKR 入金日折算值）`;
+        }
+        cashDetails.appendChild(line);
+        if(flow.fxEstimate) flow.fxMatches.forEach(trade=>{
+            const detail = document.createElement("div");
+            detail.className = "usage-tip";
+            detail.textContent = `换汇 ${trade.date.toLocaleDateString("zh-CN")}：支出 ${(-trade.proceeds).toLocaleString("zh-CN",{maximumFractionDigits:8})} HKD → 买入 ${trade.quantity.toLocaleString("zh-CN",{maximumFractionDigits:8})} USD，成交价 ${trade.price.toLocaleString("zh-CN",{maximumFractionDigits:8})}`;
+            cashDetails.appendChild(detail);
+        });
+    });
+    const transferDetails = cnt.querySelector(".transfer-details");
+    row.transferEntries.forEach(flow=>{
+        const line = document.createElement("div");
+        line.className = "usage-tip";
+        line.textContent = `${flow.date.toLocaleDateString("zh-CN")} ${flow.symbol} ${flow.direction==="IN" ? "转入" : "转出"} ${flow.quantity.toLocaleString("zh-CN",{maximumFractionDigits:8})}，市值 ${Math.abs(flow.amount).toLocaleString("zh-CN",{maximumFractionDigits:2})} ${flow.currency}`;
+        transferDetails.appendChild(line);
+    });
+    wrap.classList.remove("hide");
+}
+function closeModal(){
+    document.getElementById("modalWrap").classList.add("hide");
+}
+window.addEventListener("resize",()=>{
+    if(chartPnl) chartPnl.resize();
+    if(chartNav) chartNav.resize();
+})
+</script>
+</body>
+</html>
